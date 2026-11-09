@@ -1,4 +1,4 @@
-"""Plotly figures and summary text for the interactive quality report (quality_report.ipynb).
+"""Plotly figures and summary text for the interactive quality report (dataset_quality.ipynb).
 
 Every figure is built from raw (non-derived) data and measured at run time.
 """

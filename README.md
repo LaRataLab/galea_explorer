@@ -32,7 +32,7 @@ If no dialog can be shown (no display), the first session under `./data` is used
 
 ## Notebooks
 
-- **`quality_report.ipynb`**: the interactive data-quality report. It covers:
+- **`dataset_quality.ipynb`**: the interactive data-quality report. It covers:
   - session summary;
   - automated findings;
   - clock fit and latency;
@@ -51,8 +51,8 @@ If no dialog can be shown (no display), the first session under `./data` is used
   - in the browser, **view suggestion**, adjust the zoom, then **mark view as valid**;
   - it is saved with the dataset in `<session>/galea_session.json`.
 
-  While no range is confirmed, the quality metrics use the whole recording. `analysis.ipynb` starts clipped to it when it exists.
-- **`analysis.ipynb`**: loads the session with derived signals and opens the browser and the **pair-analysis GUI**.
+  While no range is confirmed, the quality metrics use the whole recording. `dataset_explorer.ipynb` starts clipped to it when it exists.
+- **`dataset_explorer.ipynb`**: loads the session with derived signals and opens the browser and the **pair-analysis GUI**.
   - The GUI analyses two channels over the browser's clip or view, using cross-correlation, or coherence with the MSC and phase spectra.
   - Each analysis has its own options.
   - **export figure** writes `exports/<dataset>_<A>_vs_<B>_<analysis>_<t0>-<t1>s.png`.
@@ -65,7 +65,7 @@ If no dialog can be shown (no display), the first session under `./data` is used
 | `annotations` | user annotations stored in the session folder (`galea_session.json`): `valid_range`, `set_valid_range`, `clear_valid_range`, `analysis_range` |
 | `clock` | common clock: device time → PC time by a lower-envelope linear fit; `t` = s since the first valid ExG sample |
 | `qc` | `qc_report`, `channel_table`, `channel_quality`, `suggest_valid_range` |
-| `qc_plots` | figures and recommendations for the quality report |
+| `qc_plots` | figures and recommendations for the quality report (`dataset_quality.ipynb`) |
 | `preprocess` | per-segment filters (railed samples → NaN), min/max decimation |
 | `browser` | `SignalBrowser`: stacked, zoom-refetching signal browser with clip and presets |
 | `pair_gui` | `PairGUI` and pluggable `PairAnalysis` classes (`CrossCorrelation`, `Coherence`) |

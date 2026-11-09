@@ -245,7 +245,7 @@ def qc_report(session) -> pd.DataFrame:
         sug = suggest_valid_range(session)
         add("valid range", "warn", "Not confirmed: quality metrics use the whole recording. "
             + (f"Suggested t > {sug['t0']:.0f} s ({'; '.join(sug['reasons'])}). " if sug["t0"] > 0 else "")
-            + "Confirm or adjust it in the browser (quality report, section 5).")
+            + "Confirm or adjust it in the browser (dataset_quality.ipynb, section 5).")
     a0, a1, label = analysis_range(session)
     cq = channel_quality(session, a0, a1)
     if "rms_1_40_uV" in cq:
