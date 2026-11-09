@@ -9,3 +9,6 @@ __pycache__/
 # OS / cloud sync
 desktop.ini
 .DS_Store
+
+# local notes for Claude Code (machine-specific paths)
+CLAUDE.local.md
