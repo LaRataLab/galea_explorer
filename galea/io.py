@@ -125,9 +125,72 @@ def find_sessions(root: str) -> list[str]:
     return sorted({os.path.dirname(h) for h in hits})
 
 
-def resolve_data(data: str | None = None, root: str | None = None) -> str:
-    """Session folder to use: `data` if given, else $GALEA_DATA, else the first session under root (default ./data)."""
+_PREFS = os.path.join(os.path.expanduser("~"), ".galea_explorer.json")
+
+
+def _last_folder() -> str | None:
+    try:
+        import json
+        with open(_PREFS, encoding="utf-8") as f:
+            d = json.load(f).get("last_session")
+        return d if d and os.path.isdir(d) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _remember_folder(folder: str):
+    try:
+        import json
+        with open(_PREFS, "w", encoding="utf-8") as f:
+            json.dump({"last_session": os.path.abspath(folder)}, f)
+    except OSError:
+        pass
+
+
+def _tk_available() -> bool:
+    try:
+        import tkinter as tk
+        tk.Tk().destroy()
+        return True
+    except Exception:
+        return False
+
+
+def choose_folder(initialdir: str | None = None, title: str = "Select a Galea session folder") -> str | None:
+    """Open the OS folder-selection dialog; returns the chosen folder, or None if cancelled or unavailable."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+    except Exception:            # no Tk or no display
+        return None
+    try:
+        root.withdraw()
+        root.attributes("-topmost", True)    # keep the dialog above VS Code / the browser
+        root.update()
+        folder = filedialog.askdirectory(parent=root, title=title, initialdir=initialdir, mustexist=True)
+    finally:
+        root.destroy()
+    return folder or None
+
+
+def resolve_data(data: str | None = None, root: str | None = None, ask: bool = True) -> str:
+    """Session folder to use.
+
+    Order: `data` if given; else $GALEA_DATA; else (ask=True) the OS folder dialog, starting at the
+    last folder chosen; else the first session under root (default ./data). A chosen folder that
+    contains several sessions resolves to the first one.
+    """
     data = data or os.environ.get("GALEA_DATA")
+    root = root or "data"
+    chosen = False
+    if not data and ask:
+        last = _last_folder()
+        start = os.path.dirname(last) if last else (os.path.abspath(root) if os.path.isdir(root) else None)
+        data = choose_folder(start)
+        chosen = data is not None
+        if data is None and _tk_available():
+            raise RuntimeError("No session folder selected (dialog cancelled). Re-run the cell, or set DATA.")
     if data:
         if not os.path.isdir(data):
             raise FileNotFoundError(data)
@@ -136,8 +199,9 @@ def resolve_data(data: str | None = None, root: str | None = None) -> str:
             raise FileNotFoundError(f"No BrainFlow-RAW_*.csv under {data}")
         if os.path.normpath(sessions[0]) != os.path.normpath(data) and len(sessions) > 1:
             print(f"{len(sessions)} sessions under {data}; using {sessions[0]}")
+        if chosen:
+            _remember_folder(sessions[0])
         return sessions[0]
-    root = root or "data"
     sessions = find_sessions(root)
     if not sessions:
         raise FileNotFoundError(f"No session folder under {os.path.abspath(root)}; set DATA or $GALEA_DATA")

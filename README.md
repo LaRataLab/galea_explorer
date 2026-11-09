@@ -23,7 +23,12 @@ Point the notebooks at one **session folder**: the folder an OpenBCI GUI recordi
 | `OpenBCI-SignalCheck-Impedance-*.txt` | impedance table (often empty) |
 | `Timestamp_*.txt` | BrainFlow's round-trip pings, sent before streaming |
 
-Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`. In each notebook, set `DATA = "<session folder>"`. Alternatively, leave it as `None` and the notebook uses `$GALEA_DATA`, or else the first session under `./data`.
+Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`, or anywhere else. Each notebook picks the session from `DATA` at the top:
+- `None` (default): an OS folder dialog opens, starting at the last folder chosen (remembered in `~/.galea_explorer.json`).
+- a path: that session, no dialog.
+- `$GALEA_DATA`, if set, is used when `DATA` is `None`, also without a dialog (e.g. for headless runs).
+
+If no dialog can be shown (no display), the first session under `./data` is used.
 
 ## Notebooks
 
@@ -56,7 +61,7 @@ Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`.
 
 | module | role |
 |---|---|
-| `io` | `load_session(folder, derived=False, tz=None)`, `find_sessions`, `resolve_data` |
+| `io` | `load_session(folder, derived=False, tz=None)`, `find_sessions`, `resolve_data` (path, `$GALEA_DATA` or folder dialog), `choose_folder` |
 | `annotations` | user annotations stored in the session folder (`galea_session.json`): `valid_range`, `set_valid_range`, `clear_valid_range`, `analysis_range` |
 | `clock` | common clock: device time → PC time by a lower-envelope linear fit; `t` = s since the first valid ExG sample |
 | `qc` | `qc_report`, `channel_table`, `channel_quality`, `suggest_valid_range` |
