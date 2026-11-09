@@ -32,14 +32,21 @@ Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`.
   - automated findings;
   - clock fit and latency;
   - gaps;
-  - a railing map with the settling time;
+  - a railing map with the suggested setup period;
   - per-channel quality grades and PSDs;
   - Aux sensors;
   - GUI signal-check;
-  - a raw-signal browser;
+  - a raw-signal browser, where you confirm the **valid range**;
   - recommendations.
 
   It uses raw signals only.
+
+  **Valid range.** This is the part of the recording you confirm as usable, for example after headset setup. It is never set automatically:
+  - the report suggests one;
+  - in the browser, **view suggestion**, adjust the zoom, then **mark view as valid**;
+  - it is saved with the dataset in `<session>/galea_session.json`.
+
+  Until you confirm one, it stays undefined, and the quality metrics use the whole recording. `analysis.ipynb` starts clipped to it when it exists.
 - **`analysis.ipynb`**: loads the session with derived signals and opens the browser and the **pair-analysis GUI**.
   - The GUI analyses two channels over the browser's clip or view, using cross-correlation, or coherence with the MSC and phase spectra.
   - Each analysis has its own options.
@@ -50,8 +57,9 @@ Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`.
 | module | role |
 |---|---|
 | `io` | `load_session(folder, derived=False, tz=None)`, `find_sessions`, `resolve_data` |
+| `annotations` | user annotations stored in the session folder (`galea_session.json`): `valid_range`, `set_valid_range`, `clear_valid_range`, `analysis_range` |
 | `clock` | common clock: device time → PC time by a lower-envelope linear fit; `t` = s since the first valid ExG sample |
-| `qc` | `qc_report`, `channel_table`, `channel_quality`, `settle_time` / `settle_info` |
+| `qc` | `qc_report`, `channel_table`, `channel_quality`, `suggest_valid_range` |
 | `qc_plots` | figures and recommendations for the quality report |
 | `preprocess` | per-segment filters (railed samples → NaN), min/max decimation |
 | `browser` | `SignalBrowser`: stacked, zoom-refetching signal browser with clip and presets |

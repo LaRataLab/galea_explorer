@@ -20,6 +20,13 @@ whole-session scales and the "full" button then use only that range (e.g. to lea
 out the setup period); "unclip" restores the full recording. The current clip is
 available as `browser.clip` (None or (t0, t1) in s).
 
+Valid range (annotate=True): the part of the recording the user confirms as usable,
+stored with the dataset (galea.annotations, `<session>/galea_session.json`). It is never set
+automatically: "view suggestion" zooms to the suggested range (galea.qc.suggest_valid_range,
+dashed outline); adjust the view by zooming / start+window, then "mark view as valid" saves
+it (solid green edges; the excluded part is tinted). "clear" makes it undefined again.
+`browser.on_valid_change(fn)` registers fn(range_or_None), e.g. to refresh dependent outputs.
+
 Zooming re-fetches data for the visible range with min/max decimation, so full
 250 Hz detail appears when you zoom in.
 """
@@ -31,6 +38,7 @@ import ipywidgets as W
 import plotly.graph_objects as go
 
 from . import preprocess as pp
+from . import annotations as ann
 from .io import channel_group
 
 GROUP_COLORS = {
@@ -41,11 +49,15 @@ POINTS_PER_TRACE = 2500
 
 class SignalBrowser:
     def __init__(self, session, channels: list[str] | None = None, height_per_channel: int = 70,
-                 width: int = 1300, groups: list[str] | None = None):
+                 width: int = 1300, groups: list[str] | None = None, annotate: bool = True):
         self.s = session
         self._cache: dict = {}
         self._busy = False
         self.clip: tuple[float, float] | None = None
+        self.annotate = annotate
+        self._valid_cbs: list = []
+        self.valid = ann.valid_range(session) if annotate else None
+        self._suggest = None
         groups = {g: c for g, c in session.channels.items() if c and (groups is None or g in groups)}
         self.groups = groups
         default = channels or self._default_channels(groups)
@@ -106,6 +118,16 @@ class SignalBrowser:
         unclip_btn.on_click(lambda _: self.set_clip(None))
         self.status = W.HTML()
         self.clip_label = W.HTML()
+        self.valid_label = W.HTML()
+        view_sug_btn = W.Button(description="view suggestion", layout=W.Layout(width="125px"),
+                                tooltip="zoom to the suggested valid range (or to the confirmed one)")
+        mark_btn = W.Button(description="mark view as valid", layout=W.Layout(width="140px"), button_style="success",
+                            tooltip="confirm the plotted time range as the valid range; saved with the dataset")
+        clear_valid_btn = W.Button(description="clear", layout=W.Layout(width="60px"),
+                                   tooltip="remove the confirmed valid range (undefined again)")
+        view_sug_btn.on_click(lambda _: self._view_suggestion())
+        mark_btn.on_click(lambda _: self.mark_valid(*self._range))
+        clear_valid_btn.on_click(lambda _: self.clear_valid())
 
         self.fig = go.FigureWidget()
         self.fig.update_layout(template="plotly_white", margin=dict(l=150, r=20, t=30, b=40),
@@ -122,10 +144,12 @@ class SignalBrowser:
             W.HBox([self.xmode, self.hover, self.width, self.hpc]),
             W.HBox([self.t_start, self.t_win, go_btn, prev_btn, next_btn, full_btn, self.status]),
             W.HBox([clip_btn, unclip_btn, self.clip_label]),
-        ])
+        ] + ([W.HBox([W.HTML("<b style='color:#2e7d32'>valid range</b>&nbsp;"), view_sug_btn, mark_btn,
+                      clear_valid_btn, self.valid_label])] if annotate else []))
         self.widget = W.VBox([W.HBox([pick_box, W.VBox([presets, clear])]), controls, self.fig])
         self._range = (0.0, self._dur)
         self._update_clip_label()
+        self._update_valid_label()
         self.redraw()
 
     # ------------------------------------------------------------------ helpers
@@ -211,6 +235,72 @@ class SignalBrowser:
             a, b = self.clip
             self.clip_label.value = (f"<span style='color:#b36b00'><b>clipped</b> to {a:.2f}–{b:.2f} s "
                                      f"({b - a:.1f} s): filters, whole-session scales and 'full' use this range</span>")
+
+    # ------------------------------------------------------------------ valid range
+    @property
+    def suggestion(self) -> dict:
+        if self._suggest is None:
+            from .qc import suggest_valid_range
+            self._suggest = suggest_valid_range(self.s)
+        return self._suggest
+
+    def on_valid_change(self, fn):
+        """Call fn(valid_range_or_None) whenever the valid range is marked or cleared."""
+        self._valid_cbs.append(fn)
+
+    def _notify_valid(self):
+        self._update_valid_label()
+        self.redraw()
+        for fn in self._valid_cbs:
+            fn(self.valid)
+
+    def mark_valid(self, t0: float, t1: float):
+        """Confirm [t0, t1] as the valid range and save it with the dataset."""
+        try:
+            self.valid = ann.set_valid_range(self.s, t0, t1)
+        except ValueError as e:
+            self.valid_label.value = f"<span style='color:#c00'>{e}</span>"
+            return
+        self._notify_valid()
+
+    def clear_valid(self):
+        ann.clear_valid_range(self.s)
+        self.valid = None
+        self._notify_valid()
+
+    def _view_suggestion(self):
+        a, b = self.valid if self.valid is not None else (self.suggestion["t0"], self.suggestion["t1"])
+        self._goto(a, b - a)
+
+    def _update_valid_label(self):
+        if not self.annotate:
+            return
+        if self.valid is not None:
+            a, b = self.valid
+            self.valid_label.value = (f"<span style='color:#2e7d32'><b>confirmed</b> {a:.2f}–{b:.2f} s ({b - a:.1f} s), "
+                                      f"saved in {ann.ANNOT_FILE}</span>")
+        else:
+            sg = self.suggestion
+            hint = (f"suggested {sg['t0']:.1f}–{sg['t1']:.1f} s ({'; '.join(sg['reasons'])})" if sg["t0"] > 0
+                    else "no setup period detected; suggested: whole recording")
+            self.valid_label.value = f"<span style='color:#b36b00'><b>not confirmed</b> · {hint}</span>"
+
+    def _valid_shapes(self) -> list[dict]:
+        if not self.annotate:
+            return []
+        x = lambda v: self._to_x(np.array([v]))[0]
+        if self.valid is not None:
+            a, b = self.valid
+            out = [dict(type="line", xref="x", yref="paper", x0=x(v), x1=x(v), y0=0, y1=1,
+                        line=dict(color="#2e7d32", width=2)) for v in (a, b)]
+            for lo, hi in ((min(0.0, a), a), (b, max(self._dur, b))):
+                if hi > lo:
+                    out.append(dict(type="rect", xref="x", yref="paper", x0=x(lo), x1=x(hi), y0=0, y1=1,
+                                    fillcolor="#d1495b", opacity=0.08, line_width=0, layer="below"))
+            return out
+        sg = self.suggestion
+        return [dict(type="rect", xref="x", yref="paper", x0=x(sg["t0"]), x1=x(sg["t1"]), y0=0, y1=1,
+                     fillcolor="rgba(0,0,0,0)", line=dict(color="#2e7d32", width=1.5, dash="dash"), layer="above")]
 
     # ------------------------------------------------------------------ data
     def _data(self, ch):
@@ -333,7 +423,7 @@ class SignalBrowser:
                 yaxis=dict(tickvals=[l[1] for l in self._layout], ticktext=self._ticktext(), range=[-1, max(n, 1)],
                            zeroline=False, showgrid=True, gridcolor="#eee", fixedrange=False),
                 xaxis=dict(title="time since start (s)" if self.xmode.value == "t (s)" else
-                           f"local time ({self.s.t0_wall():%Y-%m-%d}, UTC−4)",
+                           f"local time ({self.s.t0_wall():%Y-%m-%d}, UTC{self.s.t0_wall():%z})",
                            range=[self._to_x(np.array([t0]))[0], self._to_x(np.array([t1]))[0]],
                            showspikes=True, spikemode="across", spikethickness=1),
             )
@@ -343,7 +433,7 @@ class SignalBrowser:
                     xs = self._to_x(np.array([r.t_start, r.t_end]))
                     shapes.append(dict(type="rect", xref="x", yref="paper", x0=xs[0], x1=xs[1], y0=0, y1=1,
                                        fillcolor="#999", opacity=0.25, line_width=0, layer="below"))
-            self.fig.layout.shapes = shapes
+            self.fig.layout.shapes = shapes + self._valid_shapes()
         self._busy = False
         self._set_status()
 

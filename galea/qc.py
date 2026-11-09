@@ -6,6 +6,7 @@ import re
 import numpy as np
 import pandas as pd
 
+from .annotations import analysis_range, valid_range, valid_range_info
 from .io import EXG_CHANNELS, RAIL_FRACTION, RAIL_UV, channel_group, read_exg
 
 
@@ -48,7 +49,7 @@ SETTLE_MARGIN_S = 15.0   # after the last railed sample
 
 
 def settle_info(session) -> dict:
-    """When the recording becomes usable.
+    """Heuristic estimate of when headset setup ends (input to suggest_valid_range only).
 
     Returns dict(rails_end, ppg_contact, eda_flat_end, settle) in s: last railed ExG sample,
     start of stable PPG skin contact, end of the initial flat EDA (each None if not applicable),
@@ -79,13 +80,23 @@ def settle_info(session) -> dict:
     return out
 
 
-def settle_time(session) -> float:
-    """Start of the usable part of the recording (s); see settle_info."""
-    return settle_info(session)["settle"]
+def suggest_valid_range(session) -> dict:
+    """A *suggested* valid range, for the user to confirm or adjust in the browser.
+
+    Never applied automatically. Returns dict(t0, t1, reasons, info): t0 = settle_info's estimate
+    (later of last railing + 15 s and stable PPG contact), t1 = end of recording.
+    """
+    si = settle_info(session)
+    why = []
+    if si["rails_end"] is not None:
+        why.append(f"last railed sample at {si['rails_end']:.1f} s (+{SETTLE_MARGIN_S:.0f} s)")
+    if si["ppg_contact"] is not None:
+        why.append(f"stable PPG contact from {si['ppg_contact']:.1f} s")
+    return dict(t0=si["settle"], t1=float(session.exg["t"].iloc[-1]), reasons=why, info=si)
 
 
 def channel_quality(session, t0: float | None = None, t1: float | None = None) -> pd.DataFrame:
-    """Per-ExG-channel quality over [t0, t1] (default: settle_time to the end).
+    """Per-ExG-channel quality over [t0, t1] (default: the confirmed valid range, else the whole recording).
 
     rms_1_40_uV: SD of the 1–40 Hz band. line_ratio: mean PSD 58–62 Hz / mean PSD 40–56 Hz.
     kurtosis: excess kurtosis of the 1–40 Hz signal (spikes / pops; Gaussian = 0).
@@ -98,8 +109,9 @@ def channel_quality(session, t0: float | None = None, t1: float | None = None) -
     from . import preprocess as pp
     exg = session.exg
     t = exg["t"].to_numpy()
-    t0 = settle_time(session) if t0 is None else t0
-    t1 = t[-1] if t1 is None else t1
+    a0, a1, _ = analysis_range(session)
+    t0 = a0 if t0 is None else t0
+    t1 = a1 if t1 is None else t1
     sel = (t >= t0) & (t <= t1)
     fs = 250.0
     rows = []
@@ -224,19 +236,24 @@ def qc_report(session) -> pd.DataFrame:
             "% samples ≥90 % of full scale: " + ", ".join(f"{c} {v:.1f}" for c, v in worst.items() if v > 1) + ".")
     else:
         add("railing", "ok", f"Railed samples ≤ 1 % on every channel (max {worst.index[0]} {worst.iloc[0]:.2f} %).")
-    si = settle_info(session)
-    if si["rails_end"] is not None:
-        add("settling", "warn", f"Last railed sample at t={si['rails_end']:.1f} s (headset donning / electrode settling)"
-            + (f"; stable PPG contact from t={si['ppg_contact']:.1f} s" if si["ppg_contact"] is not None else "")
-            + f". Usable from t≈{si['settle']:.0f} s (settle_time).")
-    elif si["settle"] > 0:
-        add("settling", "info", f"No railing; stable PPG contact from t={si['ppg_contact']:.1f} s.")
-    cq = channel_quality(session, si["settle"])
+    vr = valid_range(session)
+    if vr is not None:
+        info = valid_range_info(session)
+        add("valid range", "ok", f"Confirmed t={vr[0]:.1f}–{vr[1]:.1f} s ({vr[1] - vr[0]:.0f} s; "
+            f"confirmed {info.get('confirmed_at', '?')[:16].replace('T', ' ')}). Quality metrics use this range.")
+    else:
+        sug = suggest_valid_range(session)
+        add("valid range", "warn", "Not confirmed: quality metrics use the whole recording. "
+            + (f"Suggested t > {sug['t0']:.0f} s ({'; '.join(sug['reasons'])}). " if sug["t0"] > 0 else "")
+            + "Confirm or adjust it in the browser (quality report, section 6).")
+    a0, a1, label = analysis_range(session)
+    cq = channel_quality(session, a0, a1)
     if "rms_1_40_uV" in cq:
         eeg = cq[cq.group == "EEG"]
         noisy = eeg.index[eeg["rms_1_40_uV"] > 50].tolist()
-        add("noise (settled)", "warn" if noisy else "ok",
-            f"1–40 Hz RMS after t≈{si['settle']:.0f} s: " + ", ".join(f"{c} {v:.0f}" for c, v in cq["rms_1_40_uV"].items())
+        add("noise", "warn" if noisy else "ok",
+            f"1–40 Hz RMS over t={a0:.0f}–{a1:.0f} s ({label}): "
+            + ", ".join(f"{c} {v:.0f}" for c, v in cq["rms_1_40_uV"].items())
             + " µV." + (f" EEG above 50 µV (suspect contact): {', '.join(noisy)}." if noisy else ""))
         poor = cq.index[cq.grade == "poor"].tolist()
         add("channel grades", "warn" if poor else "ok",

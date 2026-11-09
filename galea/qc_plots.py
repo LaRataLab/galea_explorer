@@ -12,7 +12,8 @@ from scipy import signal
 
 from . import preprocess as pp
 from .io import channel_group
-from .qc import channel_table, railed_mask, settle_info
+from .annotations import analysis_range, valid_range, valid_range_info
+from .qc import channel_table, railed_mask, suggest_valid_range
 
 GROUP_COLORS = {"EEG": "#2a6fdb", "EMG": "#d1495b", "EOG": "#8a5cc2", "Aux": "#2e8b57"}
 SEV_COLORS = {"error": "#f8d7da", "warn": "#fff3cd", "info": "", "ok": "#d4edda"}
@@ -32,20 +33,38 @@ def _gap_bands(fig, s, rows=None, stream="ExG"):
                 fig.add_vrect(x0=g.t_start, x1=g.t_end, row=r, col=1, **kw)
 
 
-def _settle_lines(fig, si, rows=None):
-    marks = [("settle", si["settle"], "#2e7d32", "top right")]
-    if si.get("ppg_contact") is not None:
-        marks.append(("PPG contact", si["ppg_contact"], "#b36b00", "top left"))
-    for name, x, c, pos in marks:
-        if not x:
+def _range_marks(fig, s, rows=None):
+    """Confirmed valid range (solid green lines) or, if none, the suggested start (dashed grey)."""
+    vr = valid_range(s)
+    if vr is not None:
+        marks = [("valid from", vr[0], "#2e7d32", "solid", "top right"), ("valid to", vr[1], "#2e7d32", "solid", "top left")]
+    else:
+        sug = suggest_valid_range(s)
+        marks = [("suggested start (not confirmed)", sug["t0"], "#777", "dash", "top right")]
+        if sug["info"].get("ppg_contact") is not None:
+            marks.append(("PPG contact", sug["info"]["ppg_contact"], "#b36b00", "dot", "top left"))
+    dur = float(s.exg["t"].iloc[-1])
+    for name, x, c, dash, pos in marks:
+        if not x or x >= dur:
             continue
-        kw = dict(x=x, line=dict(color=c, width=1.5, dash="dash"))
+        kw = dict(x=x, line=dict(color=c, width=1.5, dash=dash))
         lab = dict(annotation_text=name, annotation_position=pos, annotation_font_color=c, annotation_font_size=10)
         if rows is None:
             fig.add_vline(**kw, **lab)
         else:
             for i, r in enumerate(rows):
                 fig.add_vline(row=r, col=1, **kw, **(lab if i == 0 else {}))
+
+
+def valid_range_text(s) -> str:
+    """One line: the confirmed valid range, or 'not confirmed' plus the suggestion."""
+    vr = valid_range(s)
+    if vr is not None:
+        info = valid_range_info(s)
+        return (f"t = {vr[0]:.1f}–{vr[1]:.1f} s ({vr[1] - vr[0]:.0f} s), confirmed "
+                f"{info.get('confirmed_at', '?')[:16].replace('T', ' ')}")
+    sug = suggest_valid_range(s)
+    return ("not confirmed" + (f" (suggested t > {sug['t0']:.0f} s: {'; '.join(sug['reasons'])})" if sug["t0"] > 0 else ""))
 
 
 # ----------------------------------------------------------------------------- session
@@ -62,7 +81,7 @@ def session_summary(s) -> pd.DataFrame:
         ("Aux", f"{len(s.aux_channels)} channels × {len(aux)} samples, {1 / np.median(np.diff(aux['t'])):.1f} Hz"
          if len(aux) else "missing"),
         ("Signal-check (GUI)", f"{len(s.live)} updates" if len(s.live) else "missing"),
-        ("usable from (settle_time)", f"t ≈ {settle_info(s)['settle']:.1f} s"),
+        ("valid range", valid_range_text(s)),
     ]
     rows += [(f"file: {k}", v.split("\\")[-1].split("/")[-1] if v else "— missing —") for k, v in s.files.items()]
     return pd.DataFrame(rows, columns=["item", "value"]).set_index("item")
@@ -106,12 +125,11 @@ def railed_fraction_map(s, bin_s=1.0) -> pd.DataFrame:
 
 def fig_railing_map(s, bin_s=1.0) -> go.Figure:
     m = railed_fraction_map(s, bin_s)
-    si = settle_info(s)
     f = go.Figure(go.Heatmap(z=m.to_numpy(), x=m.columns + bin_s / 2, y=m.index, colorscale="Reds", zmin=0, zmax=100,
                              colorbar=dict(title="% railed"),
                              hovertemplate="%{y} t=%{x:.0f} s: %{z:.0f} % railed<extra></extra>"))
     _gap_bands(f, s)
-    _settle_lines(f, si)
+    _range_marks(f, s)
     f.update_layout(template=TEMPLATE, height=120 + 18 * len(m), margin=dict(t=40),
                     xaxis_title="t (s)", yaxis=dict(autorange="reversed"),
                     title=f"Railed samples (|x| ≥ 90 % of full scale) per {bin_s:g} s")
@@ -144,8 +162,9 @@ def style_grades(cq: pd.DataFrame):
 def fig_psd(s, t0=None, t1=None, fmax=125.0, nperseg=1024) -> go.Figure:
     """Welch PSD per ExG channel, high-pass 0.5 Hz, no notch (line noise visible), one panel per group."""
     t = s.exg["t"].to_numpy()
-    t0 = settle_info(s)["settle"] if t0 is None else t0
-    t1 = t[-1] if t1 is None else t1
+    a0, a1, _ = analysis_range(s)
+    t0 = a0 if t0 is None else t0
+    t1 = a1 if t1 is None else t1
     sel = (t >= t0) & (t <= t1)
     groups = [g for g in ("EEG", "EMG", "EOG") if any(channel_group(c) == g for c in s.exg_channels)]
     f = make_subplots(rows=1, cols=len(groups), subplot_titles=groups, shared_yaxes=True, horizontal_spacing=0.04)
@@ -188,7 +207,7 @@ def fig_aux(s, step=1) -> go.Figure | None:
                         showlegend=False, row=i, col=1)
     rows = list(range(1, len(panels) + 1))
     _gap_bands(f, s, rows=rows, stream="Aux")
-    _settle_lines(f, settle_info(s), rows=rows)
+    _range_marks(f, s, rows=rows)
     f.update_xaxes(title_text="t (s)", row=len(panels), col=1)
     f.update_layout(template=TEMPLATE, height=150 * len(panels) + 60, margin=dict(t=40))
     f.update_annotations(font_size=11)
@@ -212,7 +231,7 @@ def fig_signalcheck(s) -> go.Figure | None:
     f = go.Figure(go.Heatmap(z=z, x=live["t"], y=[c[6:] for c in cols], colorscale="Viridis",
                              colorbar=dict(title="log10 µVrms"), customdata=live[cols].to_numpy().T,
                              hovertemplate="%{y} t=%{x:.1f} s: %{customdata:.0f} µVrms<extra></extra>"))
-    _settle_lines(f, settle_info(s))
+    _range_marks(f, s)
     f.update_layout(template=TEMPLATE, height=120 + 18 * len(cols), margin=dict(t=40), xaxis_title="t (s)",
                     yaxis=dict(autorange="reversed"), title="GUI signal-check µVrms over time")
     return f
@@ -221,18 +240,17 @@ def fig_signalcheck(s) -> go.Figure | None:
 # ----------------------------------------------------------------------------- summary
 def recommendations(s, q: pd.DataFrame, cq: pd.DataFrame) -> str:
     """Markdown bullet list derived from the QC results."""
-    si = settle_info(s)
     dur = float(s.exg["t"].iloc[-1])
     out = []
-    if si["settle"] > 0:
-        why = []
-        if si["rails_end"] is not None:
-            why.append(f"last railing at {si['rails_end']:.0f} s")
-        if si["ppg_contact"] is not None:
-            why.append(f"PPG contact stable from {si['ppg_contact']:.0f} s")
-        out.append(f"**Analyse t > {si['settle']:.0f} s** ({dur - si['settle']:.0f} s of {dur:.0f} s; {', '.join(why)}).")
+    vr = valid_range(s)
+    if vr is not None:
+        out.append(f"**Valid range: t = {vr[0]:.1f}–{vr[1]:.1f} s** ({vr[1] - vr[0]:.0f} s of {dur:.0f} s, confirmed). "
+                   "Channel grades above are computed over it.")
     else:
-        out.append(f"No setup period detected: the whole {dur:.0f} s are usable.")
+        sug = suggest_valid_range(s)
+        out.append("**Valid range not confirmed**: channel grades above use the whole recording, including any setup "
+                   "period. " + (f"Suggested t > {sug['t0']:.0f} s ({'; '.join(sug['reasons'])}). " if sug["t0"] > 0 else "")
+                   + "Confirm or adjust it in the browser (section 6).")
     if s.gaps is not None and len(s.gaps):
         g = s.gaps[s.gaps.stream == "ExG"]
         if len(g):
