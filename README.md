@@ -91,6 +91,10 @@ To add a pair analysis, subclass `PairAnalysis` in `pair_gui.py` (`controls`, `c
 
 Figures and widgets use the LaRata LAB / AKCIT purple identity, defined in `galea/style.py`, which also registers the plotly template `galea`. Each channel group has a fixed colour: EEG violet, EMG pink, EOG dark teal, Aux amber, Derived light blue, and signal-check near-black. These colours were checked for colour-vision deficiency. Status colours (green / yellow / red for findings, grades and the valid range) follow the usual convention and are kept separate from the brand palette.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: branch (lab members) or fork, open a pull request, and never commit recordings, because the repo is public.
+
 ## License
 
 MIT; see [LICENSE](LICENSE). Developed at LaRata LAB (Neurofisiologia do Comportamento), with AKCIT (Centro de Competência EMBRAPII em Tecnologias Imersivas).

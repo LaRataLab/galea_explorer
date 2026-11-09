@@ -12,6 +12,7 @@ dependencies:
   - ipykernel
   - nbformat
   - nbclient
+  - nbstripout         # strips notebook outputs on commit (run "nbstripout --install" once per clone)
   - jinja2
   - anywidget
   - pip
