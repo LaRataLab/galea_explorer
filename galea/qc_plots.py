@@ -21,16 +21,20 @@ GRADE_COLORS = {"good": "#d4edda", "ok": "#fff3cd", "poor": "#f8d7da", "n/a": "#
 TEMPLATE = "plotly_white"
 
 
-def _gap_bands(fig, s, rows=None, stream="ExG"):
+def _gap_bands(fig, s, rows=None, stream="ExG", above=False, label=False):
+    """Grey bands over dropouts. above=True draws them over the data (needed on heatmaps)."""
     if s.gaps is None or not len(s.gaps):
         return
+    kw = (dict(fillcolor="rgba(120,120,120,0.35)", line=dict(color="#555", width=1), layer="above")
+          if above else dict(fillcolor="#999", opacity=0.3, line_width=0, layer="below"))
     for _, g in s.gaps[s.gaps.stream == stream].iterrows():
-        kw = dict(fillcolor="#999", opacity=0.3, line_width=0, layer="below")
+        lab = (dict(annotation_text=f"dropout {g.duration_s:.2f} s", annotation_position="bottom",
+                    annotation_font_size=10, annotation_font_color="#333") if label else {})
         if rows is None:
-            fig.add_vrect(x0=g.t_start, x1=g.t_end, **kw)
+            fig.add_vrect(x0=g.t_start, x1=g.t_end, **kw, **lab)
         else:
-            for r in rows:
-                fig.add_vrect(x0=g.t_start, x1=g.t_end, row=r, col=1, **kw)
+            for i, r in enumerate(rows):
+                fig.add_vrect(x0=g.t_start, x1=g.t_end, row=r, col=1, **kw, **(lab if i == 0 else {}))
 
 
 def _range_marks(fig, s, rows=None):
@@ -128,11 +132,11 @@ def fig_railing_map(s, bin_s=1.0) -> go.Figure:
     f = go.Figure(go.Heatmap(z=m.to_numpy(), x=m.columns + bin_s / 2, y=m.index, colorscale="Reds", zmin=0, zmax=100,
                              colorbar=dict(title="% railed"),
                              hovertemplate="%{y} t=%{x:.0f} s: %{z:.0f} % railed<extra></extra>"))
-    _gap_bands(f, s)
+    _gap_bands(f, s, above=True, label=True)
     _range_marks(f, s)
-    f.update_layout(template=TEMPLATE, height=120 + 18 * len(m), margin=dict(t=40),
+    f.update_layout(template=TEMPLATE, height=140 + 18 * len(m), margin=dict(t=40, b=50),
                     xaxis_title="t (s)", yaxis=dict(autorange="reversed"),
-                    title=f"Railed samples (|x| ≥ 90 % of full scale) per {bin_s:g} s")
+                    title=f"Railed samples (|x| ≥ 90 % of full scale) per {bin_s:g} s; grey = dropout")
     return f
 
 
@@ -250,7 +254,7 @@ def recommendations(s, q: pd.DataFrame, cq: pd.DataFrame) -> str:
         sug = suggest_valid_range(s)
         out.append("**Valid range not confirmed**: channel grades above use the whole recording, including any setup "
                    "period. " + (f"Suggested t > {sug['t0']:.0f} s ({'; '.join(sug['reasons'])}). " if sug["t0"] > 0 else "")
-                   + "Confirm or adjust it in the browser (section 6).")
+                   + "Confirm or adjust it in the browser (section 5).")
     if s.gaps is not None and len(s.gaps):
         g = s.gaps[s.gaps.stream == "ExG"]
         if len(g):
