@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.png" alt="LaRata LAB (Neurofisiologia do Comportamento) · AKCIT (Centro de Competência EMBRAPII em Tecnologias Imersivas)" width="720"></p>
+
 # galea_explorer
 
 This package loads, quality-checks and browses recordings from the **Galea** headset (OpenBCI GUI / BrainFlow). It works in Jupyter (VS Code or JupyterLab) with ipywidgets and plotly.
@@ -82,3 +84,7 @@ To add a pair analysis, subclass `PairAnalysis` in `pair_gui.py` (`controls`, `c
 - **Vendor `Timestamp` column:** this is a running-mean sync with no drift model, and it is not reliable.
 - **Common clock:** `galea.clock` fits `pc = a + b·dev` to the per-window minima of `pc − dev`. Because arrival latency is always positive, those minima trace the true relation. The fit is therefore late by the unknown minimum one-way latency (0 to about 50 ms).
 - **When that offset matters:** it doesn't matter within the headset. It does matter when aligning to other devices, which needs hardware markers.
+
+## Colours
+
+Figures and widgets use the LaRata LAB / AKCIT purple identity, defined in `galea/style.py`, which also registers the plotly template `galea`. Each channel group has a fixed colour: EEG violet, EMG pink, EOG dark teal, Aux amber, Derived light blue, and signal-check near-black. These colours were checked for colour-vision deficiency. Status colours (green / yellow / red for findings, grades and the valid range) follow the usual convention and are kept separate from the brand palette.

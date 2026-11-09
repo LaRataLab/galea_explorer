@@ -40,10 +40,8 @@ import plotly.graph_objects as go
 from . import preprocess as pp
 from . import annotations as ann
 from .io import channel_group
+from .style import BAD, GOOD, GROUP_COLORS, MUTED, TEMPLATE, WARN
 
-GROUP_COLORS = {
-    "EEG": "#2a6fdb", "EMG": "#d1495b", "EOG": "#8a5cc2", "Aux": "#2e8b57", "Derived": "#b5651d", "SignalCheck": "#c77d0a",
-}
 POINTS_PER_TRACE = 2500
 
 
@@ -130,7 +128,7 @@ class SignalBrowser:
         clear_valid_btn.on_click(lambda _: self.clear_valid())
 
         self.fig = go.FigureWidget()
-        self.fig.update_layout(template="plotly_white", margin=dict(l=150, r=20, t=30, b=40),
+        self.fig.update_layout(template=TEMPLATE, margin=dict(l=150, r=20, t=30, b=40),
                                showlegend=False, dragmode="zoom")
         self.fig.layout.on_change(self._on_relayout, "xaxis.range")
 
@@ -144,7 +142,7 @@ class SignalBrowser:
             W.HBox([self.xmode, self.hover, self.width, self.hpc]),
             W.HBox([self.t_start, self.t_win, go_btn, prev_btn, next_btn, full_btn, self.status]),
             W.HBox([clip_btn, unclip_btn, self.clip_label]),
-        ] + ([W.HBox([W.HTML("<b style='color:#2e7d32'>valid range</b>&nbsp;"), view_sug_btn, mark_btn,
+        ] + ([W.HBox([W.HTML(f"<b style='color:{GOOD}'>valid range</b>&nbsp;"), view_sug_btn, mark_btn,
                       clear_valid_btn, self.valid_label])] if annotate else []))
         self.widget = W.VBox([W.HBox([pick_box, W.VBox([presets, clear])]), controls, self.fig])
         self._range = (0.0, self._dur)
@@ -230,10 +228,10 @@ class SignalBrowser:
 
     def _update_clip_label(self):
         if self.clip is None:
-            self.clip_label.value = "<span style='color:#777'>session: full recording</span>"
+            self.clip_label.value = f"<span style='color:{MUTED}'>session: full recording</span>"
         else:
             a, b = self.clip
-            self.clip_label.value = (f"<span style='color:#b36b00'><b>clipped</b> to {a:.2f}–{b:.2f} s "
+            self.clip_label.value = (f"<span style='color:{WARN}'><b>clipped</b> to {a:.2f}–{b:.2f} s "
                                      f"({b - a:.1f} s): filters, whole-session scales and 'full' use this range</span>")
 
     # ------------------------------------------------------------------ valid range
@@ -259,7 +257,7 @@ class SignalBrowser:
         try:
             self.valid = ann.set_valid_range(self.s, t0, t1)
         except ValueError as e:
-            self.valid_label.value = f"<span style='color:#c00'>{e}</span>"
+            self.valid_label.value = f"<span style='color:{BAD}'>{e}</span>"
             return
         self._notify_valid()
 
@@ -277,13 +275,13 @@ class SignalBrowser:
             return
         if self.valid is not None:
             a, b = self.valid
-            self.valid_label.value = (f"<span style='color:#2e7d32'><b>confirmed</b> {a:.2f}–{b:.2f} s ({b - a:.1f} s), "
+            self.valid_label.value = (f"<span style='color:{GOOD}'><b>confirmed</b> {a:.2f}–{b:.2f} s ({b - a:.1f} s), "
                                       f"saved in {ann.ANNOT_FILE}</span>")
         else:
             sg = self.suggestion
             hint = (f"suggested {sg['t0']:.1f}–{sg['t1']:.1f} s ({'; '.join(sg['reasons'])})" if sg["t0"] > 0
                     else "no setup period detected; suggested: whole recording")
-            self.valid_label.value = f"<span style='color:#b36b00'><b>not confirmed</b> · {hint}</span>"
+            self.valid_label.value = f"<span style='color:{WARN}'><b>not confirmed</b> · {hint}</span>"
 
     def _valid_shapes(self) -> list[dict]:
         if not self.annotate:
@@ -292,15 +290,15 @@ class SignalBrowser:
         if self.valid is not None:
             a, b = self.valid
             out = [dict(type="line", xref="x", yref="paper", x0=x(v), x1=x(v), y0=0, y1=1,
-                        line=dict(color="#2e7d32", width=2)) for v in (a, b)]
+                        line=dict(color=GOOD, width=2)) for v in (a, b)]
             for lo, hi in ((min(0.0, a), a), (b, max(self._dur, b))):
                 if hi > lo:
                     out.append(dict(type="rect", xref="x", yref="paper", x0=x(lo), x1=x(hi), y0=0, y1=1,
-                                    fillcolor="#d1495b", opacity=0.08, line_width=0, layer="below"))
+                                    fillcolor=BAD, opacity=0.07, line_width=0, layer="below"))
             return out
         sg = self.suggestion
         return [dict(type="rect", xref="x", yref="paper", x0=x(sg["t0"]), x1=x(sg["t1"]), y0=0, y1=1,
-                     fillcolor="rgba(0,0,0,0)", line=dict(color="#2e7d32", width=1.5, dash="dash"), layer="above")]
+                     fillcolor="rgba(0,0,0,0)", line=dict(color=GOOD, width=1.5, dash="dash"), layer="above")]
 
     # ------------------------------------------------------------------ data
     def _data(self, ch):
@@ -391,7 +389,7 @@ class SignalBrowser:
                         for i, ch in enumerate(chs)]
 
     def _ticktext(self):
-        return [f"<b>{ch}</b><br><span style='font-size:9px;color:#777'>{sc:.3g} {self.s.units.get(ch, '')}/div</span>"
+        return [f"<b>{ch}</b><br><span style='font-size:9px;color:{MUTED}'>{sc:.3g} {self.s.units.get(ch, '')}/div</span>"
                 for ch, off, sc, cen in self._layout]
 
     # ------------------------------------------------------------------ drawing
@@ -439,7 +437,7 @@ class SignalBrowser:
 
     def _set_status(self):
         t0, t1 = self._range
-        self.status.value = f"<span style='color:#777'>{len(self._layout)} channels · {t0:.2f}–{t1:.2f} s</span>"
+        self.status.value = f"<span style='color:{MUTED}'>{len(self._layout)} channels · {t0:.2f}–{t1:.2f} s</span>"
 
     def _refresh_data(self):
         """Re-fetch decimated data for the current x range; in window-scaling mode also rescale."""

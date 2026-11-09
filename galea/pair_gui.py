@@ -23,7 +23,7 @@ from plotly.subplots import make_subplots
 from scipy import signal
 
 from . import preprocess as pp
-from .browser import GROUP_COLORS
+from .style import ACCENT, BAD, BRAND, GOOD, GROUP_COLORS, MUTED, TEMPLATE, WARN
 
 EXPORT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exports")
 PAIR_GROUPS = ("EEG", "EMG", "EOG", "Aux", "Derived")   # no signal-check
@@ -235,7 +235,7 @@ class CrossCorrelation(PairAnalysis):
 
     def plot(self, fig, row, res, a, b):
         tau, r, n = res["tau"], res["r"], res["n"]
-        fig.add_trace(go.Scatter(x=tau, y=r, name="xcorr", line=dict(width=1.5, color="#2a6fdb"), customdata=n,
+        fig.add_trace(go.Scatter(x=tau, y=r, name="xcorr", line=dict(width=1.5, color=BRAND), customdata=n,
                                  hovertemplate="τ=%{x:.3f} s<br>value=%{y:.4g}<br>pairs=%{customdata}<extra></extra>"),
                       row, 1)
         fig.add_vline(x=0, line=dict(color="#999", width=1, dash="dot"), row=row, col=1)
@@ -248,7 +248,7 @@ class CrossCorrelation(PairAnalysis):
             return "no valid overlap"
         k = int(np.nanargmax(np.abs(r)))
         k0 = int(np.argmin(np.abs(tau)))
-        fig.add_trace(go.Scatter(x=[tau[k]], y=[r[k]], mode="markers+text", marker=dict(size=9, color="#d1495b"),
+        fig.add_trace(go.Scatter(x=[tau[k]], y=[r[k]], mode="markers+text", marker=dict(size=9, color=ACCENT),
                                  text=[f" peak {r[k]:.3g} at τ={tau[k]:.3f} s"], textposition="middle right",
                                  showlegend=False, hoverinfo="skip"), row, 1)
         res.update(peak_r=float(r[k]), peak_tau=float(tau[k]))
@@ -292,16 +292,16 @@ class Coherence(PairAnalysis):
             return "no frequencies in range (Δf = %.3g Hz)" % res["df"]
         with np.errstate(divide="ignore", invalid="ignore"):
             lag = np.where(f > 0, -ph / (360 * f), np.nan)          # equivalent lag; > 0: B lags A
-        fig.add_trace(go.Scatter(x=f, y=msc, name="coherence", line=dict(color="#2a6fdb", width=1.5),
+        fig.add_trace(go.Scatter(x=f, y=msc, name="coherence", line=dict(color=BRAND, width=1.5),
                                  hovertemplate="f=%{x:.3f} Hz<br>MSC=%{y:.3f}<extra></extra>"), row, 1)
         if np.isfinite(thr):
-            fig.add_hline(y=thr, line=dict(color="#d1495b", dash="dash", width=1), row=row, col=1,
+            fig.add_hline(y=thr, line=dict(color=ACCENT, dash="dash", width=1), row=row, col=1,
                           annotation_text=f"α={self.alpha.value} ({thr:.2f})", annotation_position="top right")
         sig = msc > thr
         fig.add_trace(go.Scatter(x=f[~sig], y=ph[~sig], mode="markers", name="phase (n.s.)",
                                  marker=dict(color="#ccc", size=4), hoverinfo="skip"), row + 1, 1)
         fig.add_trace(go.Scatter(x=f[sig], y=ph[sig], mode="markers", name="phase (sig.)",
-                                 marker=dict(color="#d1495b", size=6), customdata=np.c_[lag[sig], msc[sig]],
+                                 marker=dict(color=ACCENT, size=6), customdata=np.c_[lag[sig], msc[sig]],
                                  hovertemplate="f=%{x:.3f} Hz<br>phase=%{y:.0f}°<br>lag=%{customdata[0]:.3f} s"
                                                "<br>MSC=%{customdata[1]:.2f}<extra></extra>"), row + 1, 1)
         fig.add_hline(y=0, line=dict(color="#999", width=1, dash="dot"), row=row + 1, col=1)
@@ -336,7 +336,7 @@ class AnalysisGUI:
         self.run_btn.on_click(lambda _: self.run())
         self.info = W.HTML()
         self.fig = go.FigureWidget()
-        self.fig.update_layout(template="plotly_white", margin=dict(l=70, r=20, t=40, b=40), height=560,
+        self.fig.update_layout(template=TEMPLATE, margin=dict(l=70, r=20, t=40, b=40), height=560,
                                width=browser.width.value)
         header = W.HTML(f"<h3 style='margin:4px 0'>{self.title}</h3>")
         self.widget = W.VBox([header, self.controls(), W.HBox([self.source, self.run_btn, *self.extra_buttons(),
@@ -364,7 +364,7 @@ class AnalysisGUI:
         try:
             msg = self.compute(t0, t1)
         except Exception as e:  # keep the GUI alive
-            msg = f"<span style='color:#b01e2e'>error: {type(e).__name__}: {e}</span>"
+            msg = f"<span style='color:{BAD}'>error: {type(e).__name__}: {e}</span>"
         self.info.value = (f"<span style='color:#555'>&nbsp; {t0:.2f}–{t1:.2f} s ({t1 - t0:.1f} s)"
                            f"{' · clipped' if self.b.clip else ''}</span>&nbsp; {msg or ''}")
 
@@ -451,7 +451,7 @@ class PairGUI(AnalysisGUI):
         msg = an.plot(fig, 2, res, a, b)
         nvalid = int(np.sum(np.isfinite(xa) & np.isfinite(xb)))
         self.result = dict(res, analysis=an.name, a=a, b=b, fs=fs, t0=t0, t1=t1, valid_s=nvalid / fs)
-        fig.update_layout(template="plotly_white", margin=dict(l=70, r=20, t=95, b=40),
+        fig.update_layout(template=TEMPLATE, margin=dict(l=70, r=20, t=95, b=40),
                           height=400 + 220 * an.n_rows, width=self.b.width.value,
                           legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0),
                           title=dict(text=self.figure_title(), x=0.01, y=0.985, yanchor="top"))
@@ -482,6 +482,6 @@ class PairGUI(AnalysisGUI):
         except Exception as e:
             path = os.path.splitext(path)[0] + ".html"
             fig.write_html(path, include_plotlyjs="cdn")
-            self.info.value += f" <span style='color:#b36b00'>(PNG export unavailable: {type(e).__name__}; saved HTML)</span>"
-        self.info.value += f" <span style='color:#2e7d32'>saved {os.path.basename(path)}</span>"
+            self.info.value += f" <span style='color:{WARN}'>(PNG export unavailable: {type(e).__name__}; saved HTML)</span>"
+        self.info.value += f" <span style='color:{GOOD}'>saved {os.path.basename(path)}</span>"
         return path

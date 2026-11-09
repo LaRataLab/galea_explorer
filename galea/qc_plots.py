@@ -12,13 +12,12 @@ from scipy import signal
 
 from . import preprocess as pp
 from .io import channel_group
+from .style import ACCENT, BRAND, GOOD, GROUP_COLORS, LIGHT, MUTED, SEQUENTIAL, TEMPLATE, WARN
 from .annotations import analysis_range, valid_range, valid_range_info
 from .qc import channel_table, railed_mask, suggest_valid_range
 
-GROUP_COLORS = {"EEG": "#2a6fdb", "EMG": "#d1495b", "EOG": "#8a5cc2", "Aux": "#2e8b57"}
 SEV_COLORS = {"error": "#f8d7da", "warn": "#fff3cd", "info": "", "ok": "#d4edda"}
 GRADE_COLORS = {"good": "#d4edda", "ok": "#fff3cd", "poor": "#f8d7da", "n/a": "#eee"}
-TEMPLATE = "plotly_white"
 
 
 def _gap_bands(fig, s, rows=None, stream="ExG", above=False, label=False):
@@ -41,12 +40,12 @@ def _range_marks(fig, s, rows=None):
     """Confirmed valid range (solid green lines) or, if none, the suggested start (dashed grey)."""
     vr = valid_range(s)
     if vr is not None:
-        marks = [("valid from", vr[0], "#2e7d32", "solid", "top right"), ("valid to", vr[1], "#2e7d32", "solid", "top left")]
+        marks = [("valid from", vr[0], GOOD, "solid", "top right"), ("valid to", vr[1], GOOD, "solid", "top left")]
     else:
         sug = suggest_valid_range(s)
-        marks = [("suggested start (not confirmed)", sug["t0"], "#777", "dash", "top right")]
+        marks = [("suggested start (not confirmed)", sug["t0"], MUTED, "dash", "top right")]
         if sug["info"].get("ppg_contact") is not None:
-            marks.append(("PPG contact", sug["info"]["ppg_contact"], "#b36b00", "dot", "top left"))
+            marks.append(("PPG contact", sug["info"]["ppg_contact"], WARN, "dot", "top left"))
     dur = float(s.exg["t"].iloc[-1])
     for name, x, c, dash, pos in marks:
         if not x or x >= dur:
@@ -98,16 +97,16 @@ def fig_clock(s, step=5) -> go.Figure:
     dev = e.dev_ts.to_numpy()
     off = lambda v: (v - dev - fit.a) * 1e3
     f = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[.65, .35], vertical_spacing=.05)
-    f.add_scattergl(x=e.t[k], y=off(e.pc_ts.to_numpy())[k], mode="markers", marker=dict(size=2, color="#9bb7e0"),
+    f.add_scattergl(x=e.t[k], y=off(e.pc_ts.to_numpy())[k], mode="markers", marker=dict(size=2, color=LIGHT),
                     name="PC arrival ts − device ts", row=1, col=1)
-    f.add_scattergl(x=e.t[k], y=off(e.sync_ts.to_numpy())[k], mode="lines", line=dict(color="#d1495b", width=1),
+    f.add_scattergl(x=e.t[k], y=off(e.sync_ts.to_numpy())[k], mode="lines", line=dict(color=ACCENT, width=1),
                     name="vendor Timestamp − device ts", row=1, col=1)
     f.add_scatter(x=fit.dev_to_t(fit.env_dev), y=(fit.env_off - fit.a) * 1e3, mode="markers",
                   marker=dict(color="black", size=5), name="per-window minimum (envelope)", row=1, col=1)
-    f.add_scatter(x=e.t[k], y=off(fit.dev_to_epoch(dev))[k], line=dict(color="#2e8b57"),
+    f.add_scatter(x=e.t[k], y=off(fit.dev_to_epoch(dev))[k], line=dict(color=BRAND, width=2),
                   name=f"fit: pc = a + {fit.b:.5f}·dev", row=1, col=1)
     f.add_scattergl(x=e.t[k], y=np.maximum(fit.latency_ms[k], 0.1), mode="markers",
-                    marker=dict(size=2, color="#9bb7e0"), showlegend=False, row=2, col=1)
+                    marker=dict(size=2, color=LIGHT), showlegend=False, row=2, col=1)
     _gap_bands(f, s, rows=[1, 2])
     lo, hi = np.percentile(off(e.pc_ts.to_numpy()), [0.1, 99.5])
     f.update_yaxes(title="offset (ms, rel. to a)", range=[lo - 200, hi + 100], row=1, col=1)
@@ -129,7 +128,7 @@ def railed_fraction_map(s, bin_s=1.0) -> pd.DataFrame:
 
 def fig_railing_map(s, bin_s=1.0) -> go.Figure:
     m = railed_fraction_map(s, bin_s)
-    f = go.Figure(go.Heatmap(z=m.to_numpy(), x=m.columns + bin_s / 2, y=m.index, colorscale="Reds", zmin=0, zmax=100,
+    f = go.Figure(go.Heatmap(z=m.to_numpy(), x=m.columns + bin_s / 2, y=m.index, colorscale=SEQUENTIAL, zmin=0, zmax=100,
                              colorbar=dict(title="% railed"),
                              hovertemplate="%{y} t=%{x:.0f} s: %{z:.0f} % railed<extra></extra>"))
     _gap_bands(f, s, above=True, label=True)
@@ -183,7 +182,8 @@ def fig_psd(s, t0=None, t1=None, fmax=125.0, nperseg=1024) -> go.Figure:
             f.add_scatter(x=fr[m], y=P[m], name=ch, mode="lines", line=dict(width=1), row=1, col=j,
                           hovertemplate=ch + " %{x:.1f} Hz: %{y:.3g}<extra></extra>")
         f.update_xaxes(title_text="Hz", row=1, col=j)
-    f.update_yaxes(type="log", title_text="µV²/Hz", row=1, col=1)
+    f.update_yaxes(type="log")
+    f.update_yaxes(title_text="µV²/Hz", row=1, col=1)
     f.update_layout(template=TEMPLATE, height=420, margin=dict(t=50),
                     title=f"PSD, t = {t0:.0f}–{t1:.0f} s (high-pass 0.5 Hz, no notch)")
     return f
@@ -207,7 +207,7 @@ def fig_aux(s, step=1) -> go.Figure | None:
     f = make_subplots(rows=len(panels), cols=1, shared_xaxes=True, vertical_spacing=0.025,
                       subplot_titles=[p[0] for p in panels])
     for i, (name, y) in enumerate(panels, 1):
-        f.add_scattergl(x=t[::step], y=y[::step], mode="lines", line=dict(width=1, color="#2e8b57"), name=name,
+        f.add_scattergl(x=t[::step], y=y[::step], mode="lines", line=dict(width=1, color=GROUP_COLORS["Aux"]), name=name,
                         showlegend=False, row=i, col=1)
     rows = list(range(1, len(panels) + 1))
     _gap_bands(f, s, rows=rows, stream="Aux")
@@ -232,7 +232,7 @@ def fig_signalcheck(s) -> go.Figure | None:
     if not len(live) or not cols:
         return None
     z = np.log10(np.clip(live[cols].to_numpy(float).T, 1e-1, None))
-    f = go.Figure(go.Heatmap(z=z, x=live["t"], y=[c[6:] for c in cols], colorscale="Viridis",
+    f = go.Figure(go.Heatmap(z=z, x=live["t"], y=[c[6:] for c in cols], colorscale=SEQUENTIAL,
                              colorbar=dict(title="log10 µVrms"), customdata=live[cols].to_numpy().T,
                              hovertemplate="%{y} t=%{x:.1f} s: %{customdata:.0f} µVrms<extra></extra>"))
     _range_marks(f, s)
