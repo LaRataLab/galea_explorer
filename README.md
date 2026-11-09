@@ -41,12 +41,12 @@ Put sessions under `data/`, which git ignores, e.g. `data/2024-09-27_16-46-03/`.
 
   It uses raw signals only.
 
-  **Valid range.** This is the part of the recording you confirm as usable, for example after headset setup. It is never set automatically:
+  **Valid range.** This is the part of the recording you confirm as usable, for example after headset setup. It is set by the user:
   - the report suggests one;
   - in the browser, **view suggestion**, adjust the zoom, then **mark view as valid**;
   - it is saved with the dataset in `<session>/galea_session.json`.
 
-  Until you confirm one, it stays undefined, and the quality metrics use the whole recording. `analysis.ipynb` starts clipped to it when it exists.
+  While no range is confirmed, the quality metrics use the whole recording. `analysis.ipynb` starts clipped to it when it exists.
 - **`analysis.ipynb`**: loads the session with derived signals and opens the browser and the **pair-analysis GUI**.
   - The GUI analyses two channels over the browser's clip or view, using cross-correlation, or coherence with the MSC and phase spectra.
   - Each analysis has its own options.

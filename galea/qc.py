@@ -83,7 +83,7 @@ def settle_info(session) -> dict:
 def suggest_valid_range(session) -> dict:
     """A *suggested* valid range, for the user to confirm or adjust in the browser.
 
-    Never applied automatically. Returns dict(t0, t1, reasons, info): t0 = settle_info's estimate
+    Only a suggestion: the confirmed range is stored by galea.annotations. Returns dict(t0, t1, reasons, info): t0 = settle_info's estimate
     (later of last railing + 15 s and stable PPG contact), t1 = end of recording.
     """
     si = settle_info(session)

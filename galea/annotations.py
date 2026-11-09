@@ -1,9 +1,9 @@
 """User annotations stored with the dataset, in `<session folder>/galea_session.json`.
 
 Currently one annotation: the **valid range**, the part of the recording the user confirmed
-as usable (e.g. after headset setup). It is never set automatically: the quality report
-suggests one (`galea.qc.suggest_valid_range`), the user confirms or adjusts it in the
-browser, and until then it is undefined (None).
+as usable (e.g. after headset setup). The quality report suggests one
+(`galea.qc.suggest_valid_range`) and the user confirms or adjusts it in the browser.
+While none is confirmed, `valid_range` returns None.
 
 Times are stored both as `t` (s on the common clock) and as PC epoch seconds; on reading,
 the epoch is preferred, so the range stays put even if the loader's t = 0 changes.

@@ -21,8 +21,8 @@ out the setup period); "unclip" restores the full recording. The current clip is
 available as `browser.clip` (None or (t0, t1) in s).
 
 Valid range (annotate=True): the part of the recording the user confirms as usable,
-stored with the dataset (galea.annotations, `<session>/galea_session.json`). It is never set
-automatically: "view suggestion" zooms to the suggested range (galea.qc.suggest_valid_range,
+stored with the dataset (galea.annotations, `<session>/galea_session.json`). It is set by the
+user: "view suggestion" zooms to the suggested range (galea.qc.suggest_valid_range,
 dashed outline); adjust the view by zooming / start+window, then "mark view as valid" saves
 it (solid green edges; the excluded part is tinted). "clear" makes it undefined again.
 `browser.on_valid_change(fn)` registers fn(range_or_None), e.g. to refresh dependent outputs.
