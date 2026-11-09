@@ -7,6 +7,8 @@ This package loads, quality-checks and browses recordings from the **Galea** hea
 ## Install
 
 ```
+git clone https://github.com/LaRataLab/galea_explorer.git
+cd galea_explorer
 conda env create -f environment.yml      # env "galea"; also pip-installs this package (editable)
 conda activate galea
 ```
@@ -88,3 +90,7 @@ To add a pair analysis, subclass `PairAnalysis` in `pair_gui.py` (`controls`, `c
 ## Colours
 
 Figures and widgets use the LaRata LAB / AKCIT purple identity, defined in `galea/style.py`, which also registers the plotly template `galea`. Each channel group has a fixed colour: EEG violet, EMG pink, EOG dark teal, Aux amber, Derived light blue, and signal-check near-black. These colours were checked for colour-vision deficiency. Status colours (green / yellow / red for findings, grades and the valid range) follow the usual convention and are kept separate from the brand palette.
+
+## License
+
+MIT; see [LICENSE](LICENSE). Developed at LaRata LAB (Neurofisiologia do Comportamento), with AKCIT (Centro de Competência EMBRAPII em Tecnologias Imersivas).
