@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/banner.png" alt="LaRata LAB (Neurofisiologia do Comportamento) · AKCIT (Centro de Competência EMBRAPII em Tecnologias Imersivas)" width="720"></p>
+<p align="center"><img src="assets/banner.png" alt="AKCIT (Centro de Competência EMBRAPII em Tecnologias Imersivas) · LaRata LAB (Neurofisiologia do Comportamento)" width="720"></p>
 
 # galea_explorer
 
