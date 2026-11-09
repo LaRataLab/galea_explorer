@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "galea_explorer"
+version = "0.1.0"
+description = "Load, quality-check and browse Galea / OpenBCI GUI recordings"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy", "pandas", "scipy", "plotly>=5.24", "ipywidgets>=8", "anywidget", "nbformat", "jinja2", "kaleido",
+]
+
+[tool.setuptools]
+packages = ["galea", "galea.derived"]

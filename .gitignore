@@ -1,0 +1,11 @@
+# data and outputs
+data/
+exports/
+*.docx
+# python / jupyter
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+# OS / cloud sync
+desktop.ini
+.DS_Store
